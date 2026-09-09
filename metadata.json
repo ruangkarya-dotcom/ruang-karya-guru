@@ -1,0 +1,8 @@
+{
+  "name": "Remix Ruang Karya Guru",
+  "description": "Platform Digital Portal Karya, Pelatihan, Artikel Edukasi \u0026 Verifikasi Modul Ajar Guru Indonesia",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
