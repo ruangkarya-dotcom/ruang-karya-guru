@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -66,6 +66,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   );
   const [visibility, setVisibility] = useState<'public' | 'internal'>('public');
 
+  // Synchronize instructor or teacher credentials on open
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      if (isAdminMode) {
+        setNamaGuru(currentUser.nama ? `${currentUser.nama} (Tim Instruktur & Pusdiklat)` : 'Tim Instruktur Pusdiklat');
+        setNipOrInstansi(currentUser.instansi || 'Pusat Kurikulum & Pelatihan Guru Kemendikbudristek');
+      } else {
+        setNamaGuru(currentUser.nama || '');
+        setNipOrInstansi(currentUser.nip ? `NIP. ${currentUser.nip} / ${currentUser.instansi || ''}` : (currentUser.instansi || ''));
+      }
+    }
+  }, [isOpen, currentUser, isAdminMode]);
+
   // File states
   const [formatFile, setFormatFile] = useState<FileFormat>(isAdminMode ? 'DOCX' : 'PDF');
   const [fileName, setFileName] = useState('');
@@ -113,6 +126,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         deskripsi,
         tujuanPembelajaran: tujuanPembelajaran || (isAdminMode ? 'Sebagai template acuan resmi peserta workshop dalam menyusun karya portofolio.' : ''),
         namaGuru,
+        authorId: currentUser?.id,
         nipOrInstansi: nipOrInstansi || (isAdminMode ? 'Tim Instruktur Nasional' : 'Instansi Terdaftar'),
         mataPelajaran,
         jenjang,

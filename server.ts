@@ -61,6 +61,7 @@ let pendingAdminDB: Array<{
   adminRole: AdminRole;
   password: string;
   alasanAccess?: string;
+  instansi?: string;
   tanggalDaftar: string;
   status: 'pending_approval' | 'active' | 'rejected';
 }> = [];

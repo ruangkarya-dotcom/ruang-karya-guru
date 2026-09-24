@@ -289,10 +289,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         };
 
         if (onShowToast) {
-          onShowToast('Pendaftaran Berhasil!', 'Selamat Datang di Ruang Karya Guru. Akun Anda telah aktif dan diarahkan ke Beranda.', 'success');
+          onShowToast('Pendaftaran Berhasil!', 'Selamat Datang di Ruang Karya Guru. Akun Anda telah aktif dan diarahkan ke Dashboard Guru.', 'success');
         }
 
-        onLoginSuccess(registeredUser, 'home');
+        onLoginSuccess(registeredUser, 'guru');
         onClose();
         return;
       }
@@ -313,10 +313,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       };
 
       if (onShowToast) {
-        onShowToast('Pendaftaran Berhasil!', 'Selamat Datang di Ruang Karya Guru. Akun Anda telah aktif dan diarahkan ke Beranda.', 'success');
+        onShowToast('Pendaftaran Berhasil!', 'Selamat Datang di Ruang Karya Guru. Akun Anda telah aktif dan diarahkan ke Dashboard Guru.', 'success');
       }
 
-      onLoginSuccess(fallbackUser, 'home');
+      onLoginSuccess(fallbackUser, 'guru');
       onClose();
     } finally {
       setIsLoading(false);
@@ -849,11 +849,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       className="w-full bg-[#0EA5E9] hover:bg-[#0284c7] text-white font-extrabold py-3 rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? (
-                        <span>Membuat Akun & Menuju Beranda...</span>
+                        <span>Membuat Akun & Menuju Dashboard Guru...</span>
                       ) : (
                         <>
                           <Sparkles className="w-4 h-4 text-white" />
-                          <span>Daftar & Langsung Menuju Beranda</span>
+                          <span>Daftar & Langsung Menuju Dashboard Guru</span>
                           <ArrowRight className="w-4 h-4 text-white" />
                         </>
                       )}

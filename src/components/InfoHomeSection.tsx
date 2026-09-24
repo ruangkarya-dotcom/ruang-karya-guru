@@ -223,7 +223,7 @@ export const InfoHomeSection: React.FC<InfoHomeSectionProps> = ({
                 className="text-xs sm:text-sm font-bold bg-[#1E3A8A] hover:bg-[#152e72] text-white flex items-center gap-1.5 shrink-0 group cursor-pointer transition-all px-4 py-2 rounded-xl shadow-xs hover:scale-102"
               >
                 <GraduationCap className="w-4 h-4 text-cyan-300" />
-                <span>+ Unggah Karya Baru</span>
+                <span>Unggah Karya Baru</span>
               </button>
             )}
             <button
@@ -381,7 +381,7 @@ export const InfoHomeSection: React.FC<InfoHomeSectionProps> = ({
                 className="inline-flex items-center gap-2 bg-[#1E3A8A] hover:bg-[#152e72] text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-xl shadow-md shadow-blue-900/15 transition-all cursor-pointer hover:scale-102"
               >
                 <GraduationCap className="w-4 h-4 text-cyan-300" />
-                <span>+ Unggah Karya Baru</span>
+                <span>Unggah Karya Baru</span>
               </button>
               <button
                 id="btn-gallery-empty-home"

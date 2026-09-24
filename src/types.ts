@@ -26,6 +26,7 @@ export interface Karya {
   deskripsi: string;
   tujuanPembelajaran?: string;
   namaGuru: string;
+  authorId?: string;
   nipOrInstansi: string;
   mataPelajaran: string;
   jenjang: 'SD' | 'SMP' | 'SMA/SMK' | 'Umum';

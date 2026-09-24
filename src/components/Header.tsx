@@ -60,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const isAdmin = currentUser?.role === 'admin';
-  const isGuru = currentUser?.role === 'guru';
+  const isGuru = Boolean(currentUser && (currentUser.role === 'guru' || currentUser.role !== 'admin'));
   const isAdminLoginTab = activeTab === 'login-admin' || (activeTab === 'admin' && !isAdmin);
 
   const handleNavClick = (tab: 'home' | 'galeri' | 'pelatihan' | 'artikel' | 'admin' | 'guru' | 'profil-guru' | 'profil-admin' | 'login-admin') => {
@@ -74,6 +74,11 @@ export const Header: React.FC<HeaderProps> = ({
         if (!isAdminPreviewMode) onToggleAdminPreview();
         setActiveTab(tab);
       }
+      setMobileMenuOpen(false);
+      return;
+    }
+    if (isGuru && (tab === 'home' || tab === 'galeri')) {
+      setActiveTab('guru');
       setMobileMenuOpen(false);
       return;
     }
@@ -181,29 +186,33 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             /* Public Desktop Navigation */
             <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
-              <button
-                onClick={() => handleNavClick('home')}
-                className={`px-3.5 py-2 text-sm font-semibold transition-colors flex items-center gap-1.5 rounded-md cursor-pointer ${
-                  activeTab === 'home' 
-                    ? 'text-[#1E3A8A] bg-blue-50/80 border-b-2 border-[#1E3A8A]' 
-                    : 'text-slate-600 hover:text-[#1E3A8A] hover:bg-slate-50'
-                }`}
-              >
-                <Sparkles className="w-4 h-4" />
-                Beranda
-              </button>
+              {!isGuru && (
+                <button
+                  onClick={() => handleNavClick('home')}
+                  className={`px-3.5 py-2 text-sm font-semibold transition-colors flex items-center gap-1.5 rounded-md cursor-pointer ${
+                    activeTab === 'home' 
+                      ? 'text-[#1E3A8A] bg-blue-50/80 border-b-2 border-[#1E3A8A]' 
+                      : 'text-slate-600 hover:text-[#1E3A8A] hover:bg-slate-50'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Beranda
+                </button>
+              )}
 
-              <button
-                onClick={() => handleNavClick('galeri')}
-                className={`px-3.5 py-2 text-sm font-semibold transition-colors flex items-center gap-1.5 rounded-md cursor-pointer ${
-                  activeTab === 'galeri' 
-                    ? 'text-[#1E3A8A] bg-blue-50/80 border-b-2 border-[#1E3A8A]' 
-                    : 'text-slate-600 hover:text-[#1E3A8A] hover:bg-slate-50'
-                }`}
-              >
-                <FolderCheck className="w-4 h-4" />
-                Jelajah Karya
-              </button>
+              {!isGuru && (
+                <button
+                  onClick={() => handleNavClick('galeri')}
+                  className={`px-3.5 py-2 text-sm font-semibold transition-colors flex items-center gap-1.5 rounded-md cursor-pointer ${
+                    activeTab === 'galeri' 
+                      ? 'text-[#1E3A8A] bg-blue-50/80 border-b-2 border-[#1E3A8A]' 
+                      : 'text-slate-600 hover:text-[#1E3A8A] hover:bg-slate-50'
+                  }`}
+                >
+                  <FolderCheck className="w-4 h-4" />
+                  Jelajah Karya
+                </button>
+              )}
 
               <button
                 onClick={() => handleNavClick('pelatihan')}
@@ -434,24 +443,28 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               ) : (
                 <>
-                  <button
-                    onClick={() => handleNavClick('home')}
-                    className={`px-3 py-2.5 rounded-xl text-left text-sm font-semibold flex items-center gap-2 ${
-                      activeTab === 'home' ? 'bg-blue-50 text-[#1E3A8A] font-bold' : 'text-slate-700'
-                    }`}
-                  >
-                    <Sparkles className="w-4 h-4 text-cyan-600" />
-                    <span>Beranda</span>
-                  </button>
-                  <button
-                    onClick={() => handleNavClick('galeri')}
-                    className={`px-3 py-2.5 rounded-xl text-left text-sm font-semibold flex items-center gap-2 ${
-                      activeTab === 'galeri' ? 'bg-blue-50 text-[#1E3A8A] font-bold' : 'text-slate-700'
-                    }`}
-                  >
-                    <FolderCheck className="w-4 h-4 text-blue-600" />
-                    <span>Jelajah Karya</span>
-                  </button>
+                  {!isGuru && (
+                    <button
+                      onClick={() => handleNavClick('home')}
+                      className={`px-3 py-2.5 rounded-xl text-left text-sm font-semibold flex items-center gap-2 ${
+                        activeTab === 'home' ? 'bg-blue-50 text-[#1E3A8A] font-bold' : 'text-slate-700'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4 text-cyan-600" />
+                      <span>Beranda</span>
+                    </button>
+                  )}
+                  {!isGuru && (
+                    <button
+                      onClick={() => handleNavClick('galeri')}
+                      className={`px-3 py-2.5 rounded-xl text-left text-sm font-semibold flex items-center gap-2 ${
+                        activeTab === 'galeri' ? 'bg-blue-50 text-[#1E3A8A] font-bold' : 'text-slate-700'
+                      }`}
+                    >
+                      <FolderCheck className="w-4 h-4 text-blue-600" />
+                      <span>Jelajah Karya</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => handleNavClick('pelatihan')}
                     className={`px-3 py-2.5 rounded-xl text-left text-sm font-semibold flex items-center gap-2 ${

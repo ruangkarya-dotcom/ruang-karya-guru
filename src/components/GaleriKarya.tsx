@@ -148,7 +148,7 @@ export const GaleriKarya: React.FC<GaleriKaryaProps> = ({
               className="self-start md:self-auto bg-[#1E3A8A] hover:bg-[#152e72] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
             >
               <GraduationCap className="w-4 h-4 text-[#38BDF8]" />
-              + Unggah Karya Anda
+              Unggah Karya Anda
             </button>
           )}
         </div>

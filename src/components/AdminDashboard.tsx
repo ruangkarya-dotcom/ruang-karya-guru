@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   FileSpreadsheet, 
@@ -76,6 +76,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Modal State for Super Admin
   const [isManageTeamOpen, setIsManageTeamOpen] = useState<boolean>(false);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
+
+  // Monitor pending admin registration requests
+  useEffect(() => {
+    const checkPendings = () => {
+      fetch('/api/admin/pending-requests')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.requests)) {
+            setPendingRequestsCount(data.requests.length);
+          }
+        })
+        .catch(() => {});
+    };
+    checkPendings();
+    const interval = setInterval(checkPendings, 20000);
+    return () => clearInterval(interval);
+  }, [isManageTeamOpen]);
 
   // Shared Data State
   const [pesertaList, setPesertaList] = useState<Peserta[]>(INITIAL_PESERTA_LIST);
@@ -325,6 +343,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <Settings className="w-3.5 h-3.5 text-purple-300 shrink-0" />
                     <span>Kelola Akses Tim Admin</span>
+                    {pendingRequestsCount > 0 && (
+                      <span className="ml-1 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black animate-pulse shadow-xs flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+                        {pendingRequestsCount} Permohonan
+                      </span>
+                    )}
                   </button>
 
                   {onNavigateToAdminProfile && (

@@ -21,11 +21,12 @@ import {
   INITIAL_PELATIHAN_LIST, 
   INITIAL_ARTIKEL_LIST, 
   MONTHLY_TREND_DATA, 
-  FILE_FORMAT_DISTRIBUTION 
+  FILE_FORMAT_DISTRIBUTION,
+  DEFAULT_OFFICIAL_MASTER_TEMPLATES
 } from './data/initialData';
 import { Karya, User, VerificationStatus, Review, AdminRole } from './types';
 import { exportSingleKarya, ExportFormat } from './utils/excelExport';
-import { ShieldCheck, Eye, ArrowRight, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Eye, ArrowRight, X, AlertTriangle, CheckCircle2, GraduationCap, School } from 'lucide-react';
 import { initializeTabName } from './utils/tabNavigation';
 
 export default function App() {
@@ -53,32 +54,35 @@ export default function App() {
   const [isAdminPreviewMode, setIsAdminPreviewMode] = useState<boolean>(false);
   const [showAdminRestrictedNotice, setShowAdminRestrictedNotice] = useState<boolean>(false);
 
-  // LocalStorage-backed State for Karya List (starts clean at 0 works as requested)
+  // LocalStorage-backed State for Karya List (includes official master templates + user uploaded works)
   const [karyaList, setKaryaList] = useState<Karya[]>(() => {
     try {
-      // Force clear legacy default mock modules (11 items) so the repository count is 0
-      const resetFlag = localStorage.getItem('rkg_reset_modules_zero_v3');
-      if (!resetFlag) {
-        localStorage.setItem('rkg_reset_modules_zero_v3', 'done');
-        localStorage.setItem('rkg_karya_list', JSON.stringify([]));
-        return [];
-      }
       const saved = localStorage.getItem('rkg_karya_list');
+      let currentItems: Karya[] = [];
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // If legacy 11 items or 4975 downloads are detected, purge to 0
-          if (parsed.length === 11 || parsed.reduce((sum: number, item: Karya) => sum + (item.jumlahDownload || 0), 0) === 4975) {
-            localStorage.setItem('rkg_karya_list', JSON.stringify([]));
-            return [];
+          // If legacy 11 items or 4975 downloads are detected, reset to empty
+          if (parsed.length === 11 && parsed.reduce((sum: number, item: Karya) => sum + (item.jumlahDownload || 0), 0) === 4975) {
+            currentItems = [];
+          } else {
+            currentItems = parsed;
           }
-          return parsed;
         }
       }
+
+      // Always ensure official master templates are present
+      const combined = [...currentItems];
+      for (const def of DEFAULT_OFFICIAL_MASTER_TEMPLATES) {
+        if (!combined.some(item => item.id === def.id || item.judul.toLowerCase() === def.judul.toLowerCase())) {
+          combined.push(def);
+        }
+      }
+      return combined;
     } catch (e) {
       console.error(e);
+      return DEFAULT_OFFICIAL_MASTER_TEMPLATES;
     }
-    return [];
   });
 
   // LocalStorage-backed Auth User
@@ -219,6 +223,15 @@ export default function App() {
     }
   }, [currentUser, isAdminPreviewMode, activeTab]);
 
+  // Enforce Guru Workflow Isolation:
+  // Halaman Beranda & Jelajah Karya dihapus khusus untuk akun guru, jika aktif arahkan ke dashboard guru
+  useEffect(() => {
+    const isGuruAccount = Boolean(currentUser && currentUser.role !== 'admin');
+    if (isGuruAccount && (activeTab === 'home' || activeTab === 'galeri')) {
+      setActiveTab('guru');
+    }
+  }, [currentUser, activeTab]);
+
   // Purge legacy 11 mock items if detected in state
   useEffect(() => {
     if (karyaList.length === 11 && karyaList.reduce((sum, item) => sum + (item.jumlahDownload || 0), 0) === 4975) {
@@ -331,14 +344,7 @@ export default function App() {
       setIsLoginModalOpen(true);
       return;
     }
-    if (currentUser.role === 'guru') {
-      setActiveTab('guru');
-      setGuruDashboardSubTab('karya');
-      setGuruAutoOpenUpload(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      setIsUploadModalOpen(true);
-    }
+    setIsUploadModalOpen(true);
   };
 
 
@@ -367,7 +373,7 @@ export default function App() {
   };
 
   const handleDownloadKarya = (id: string, directFormat?: ExportFormat) => {
-    const target = karyaList.find(k => k.id === id);
+    const target = karyaList.find(k => k.id === id) || DEFAULT_OFFICIAL_MASTER_TEMPLATES.find(k => k.id === id);
     if (!target) return;
 
     if (directFormat) {
@@ -379,12 +385,17 @@ export default function App() {
   };
 
   const handleConfirmDownloadFormat = (id: string, format: ExportFormat) => {
+    const targetKarya = karyaList.find(k => k.id === id) || DEFAULT_OFFICIAL_MASTER_TEMPLATES.find(k => k.id === id);
     setKaryaList(prev => prev.map(item => {
       if (item.id === id) {
         return { ...item, jumlahDownload: item.jumlahDownload + 1 };
       }
       return item;
     }));
+    if (targetKarya) {
+      exportSingleKarya(targetKarya, format);
+      showToast('Unduhan Berhasil', `File "${targetKarya.judul}" berhasil diunduh dalam format ${format}.`, 'success');
+    }
   };
 
   const handleUpdateStatus = (id: string, newStatus: VerificationStatus) => {
@@ -524,8 +535,8 @@ export default function App() {
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               className="transform-gpu"
             >
-            {/* VIEW 1: HOME / BERANDA */}
-            {activeTab === 'home' && (
+            {/* VIEW 1: HOME / BERANDA (Dihapus khusus akun guru) */}
+            {activeTab === 'home' && (!currentUser || currentUser.role === 'admin') && (
               <InfoHomeSection
                 onNavigateTab={(tab) => {
                   if (currentUser?.role === 'admin' && !isAdminPreviewMode && tab !== 'admin') {
@@ -588,22 +599,39 @@ export default function App() {
                   onDeleteKarya={handleDeleteKarya}
                   onDownloadKarya={handleDownloadKarya}
                   onViewPublicProfile={() => handleOpenTeacherProfile()}
+                  onOpenUploadModal={handleOpenUpload}
                 />
               ) : (
-                <InfoHomeSection
-                  onNavigateTab={(tab) => setActiveTab(tab)}
-                  onOpenLogin={() => setIsLoginModalOpen(true)}
-                  totalKarya={totalVerifiedKarya}
-                  totalDownloads={totalDownloadsSum}
-                  currentUser={currentUser}
-                  karyaList={karyaList}
-                  onSelectKarya={handleSelectKaryaForDetail}
-                  onOpenUpload={handleOpenUpload}
-                  onDownloadKarya={handleDownloadKarya}
-                  onViewTeacherProfile={handleOpenTeacherProfile}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                />
+                <div className="max-w-xl mx-auto my-16 px-4">
+                  <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-200/90 shadow-xl text-center space-y-6">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200 text-[#1E3A8A] flex items-center justify-center mx-auto shadow-sm">
+                      <GraduationCap className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                        Portal Dashboard Guru
+                      </h2>
+                      <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+                        Silakan masuk dengan akun Pendidik / Guru Anda untuk mengelola modul ajar, memeriksa sertifikat 32 JP, dan mengakses portofolio digital.
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      <button
+                        onClick={() => handleOpenLogin()}
+                        className="w-full sm:w-auto px-6 py-3 bg-[#1E3A8A] hover:bg-blue-900 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <GraduationCap className="w-4 h-4" />
+                        <span>Masuk ke Akun Guru</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenRegister()}
+                        className="w-full sm:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer"
+                      >
+                        Daftar Akun Guru
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )
             )}
 
@@ -701,8 +729,8 @@ export default function App() {
         </ErrorBoundary>
       </main>
 
-      {/* Footer only on Home / Beranda */}
-      {activeTab === 'home' && (
+      {/* Footer only on Home / Beranda (Dihapus khusus akun guru) */}
+      {activeTab === 'home' && (!currentUser || currentUser.role === 'admin') && (
         <Footer
           onNavigateToAdminLogin={() => {
             setActiveTab('login-admin');

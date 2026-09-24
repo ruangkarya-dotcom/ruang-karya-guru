@@ -1,9 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
-import { ShieldCheck, Mail, Lock, KeyRound, Sparkles, UserCheck, ShieldAlert, CheckCircle2, UserPlus, Phone, HelpCircle, Send, Check, Eye, EyeOff, X, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ShieldCheck, Mail, Lock, KeyRound, Sparkles, UserCheck, ShieldAlert, CheckCircle2, UserPlus, Phone, HelpCircle, Send, Check, Eye, EyeOff, X, ArrowLeft, History, Clock } from 'lucide-react';
 import logoImage from '../assets/images/ruang_karya_guru_new_logo_1786451613174.jpg';
 import { User, AdminRole } from '../types';
 import { switchToPublicPortal } from '../utils/tabNavigation';
+
+export interface LastUsedAdminAccount {
+  id?: string;
+  email: string;
+  nama: string;
+  role: AdminRole;
+  instansi: string;
+  lastUsedAt?: number;
+}
+
+const DEFAULT_ADMIN_ACCOUNTS: LastUsedAdminAccount[] = [
+  {
+    email: 'kurator@ruangkaryaguru.id',
+    nama: 'Prof. Dr. Agus Setiawan',
+    role: 'admin_kurator',
+    instansi: 'Tim Kurasi Modul Ajar & Presensi',
+    lastUsedAt: Date.now() - 1000 * 60 * 15,
+  },
+  {
+    email: 'superadmin@ruangkaryaguru.id',
+    nama: 'Drs. Hendra Suwandi, M.Pd.',
+    role: 'super_admin',
+    instansi: 'Kementerian Pendidikan & Kebudayaan RI',
+    lastUsedAt: Date.now() - 1000 * 60 * 60,
+  }
+];
 
 interface AdminLoginPageProps {
   onLoginSuccess: (user: User) => void;
@@ -16,10 +42,44 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>('login');
 
-  // Login Form States & Portal Role Selection (Default: admin_kurator)
-  const [portalRole, setPortalRole] = useState<AdminRole>('admin_kurator');
-  const [email, setEmail] = useState('kurator@ruangkaryaguru.id');
-  const [password, setPassword] = useState('KuratorRKG#7723!');
+  // List of Last Used Admin Accounts (stored in localStorage)
+  const [lastUsedAccounts, setLastUsedAccounts] = useState<LastUsedAdminAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('rkg_last_used_admin_accounts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DEFAULT_ADMIN_ACCOUNTS;
+  });
+
+  // Login Form States & Portal Role Selection (Default: admin_kurator or last saved)
+  const [portalRole, setPortalRole] = useState<AdminRole>(() => {
+    try {
+      const lastRole = localStorage.getItem('rkg_last_admin_role') as AdminRole;
+      if (lastRole === 'super_admin' || lastRole === 'admin_kurator') {
+        return lastRole;
+      }
+    } catch (e) {}
+    return 'admin_kurator';
+  });
+
+  const [email, setEmail] = useState(() => {
+    try {
+      const lastEmail = localStorage.getItem('rkg_last_admin_email');
+      if (lastEmail) return lastEmail;
+    } catch (e) {}
+    return 'kurator@ruangkaryaguru.id';
+  });
+
+  // STRICT SECURITY REQUIREMENT:
+  // Password MUST ALWAYS be manual! Never prefilled or automatically stored.
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -28,8 +88,23 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const emailContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close account dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emailContainerRef.current && !emailContainerRef.current.contains(event.target as Node)) {
+        setShowAccountDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Listen to focus-admin-login event from Header "Masuk" button
   useEffect(() => {
@@ -89,17 +164,68 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [debugOTP, setDebugOTP] = useState<string | null>(null);
 
+  const saveLastUsedAccount = (userData: User) => {
+    try {
+      const currentRole = userData.adminRole || portalRole;
+      const newEntry: LastUsedAdminAccount = {
+        id: userData.id,
+        email: userData.email,
+        nama: userData.nama,
+        role: currentRole,
+        instansi: userData.instansi || (currentRole === 'super_admin' ? 'Kementerian Pendidikan & Kebudayaan RI' : 'Tim Kurasi Modul Ajar'),
+        lastUsedAt: Date.now(),
+      };
+
+      setLastUsedAccounts(prev => {
+        const filtered = prev.filter(a => a.email.toLowerCase() !== newEntry.email.toLowerCase());
+        const updated = [newEntry, ...filtered].slice(0, 4);
+        try {
+          localStorage.setItem('rkg_last_used_admin_accounts', JSON.stringify(updated));
+          localStorage.setItem('rkg_last_admin_role', newEntry.role);
+          localStorage.setItem('rkg_last_admin_email', newEntry.email);
+        } catch (e) {}
+        return updated;
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSelectAccount = (account: LastUsedAdminAccount) => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setPortalRole(account.role);
+    setEmail(account.email);
+    setShowAccountDropdown(false);
+    // STRICT SECURITY REQUIREMENT: Never auto-fill password!
+    setPassword('');
+    try {
+      localStorage.setItem('rkg_last_admin_role', account.role);
+      localStorage.setItem('rkg_last_admin_email', account.email);
+    } catch (e) {}
+    setTimeout(() => {
+      passwordInputRef.current?.focus();
+    }, 100);
+  };
+
   const handleQuickFill = (role: AdminRole) => {
     setErrorMsg('');
     setSuccessMsg('');
     setPortalRole(role);
     if (role === 'super_admin') {
       setEmail('superadmin@ruangkaryaguru.id');
-      setPassword('SuperAdmin#RKG2026!');
     } else if (role === 'admin_kurator') {
       setEmail('kurator@ruangkaryaguru.id');
-      setPassword('KuratorRKG#7723!');
     }
+    // STRICT SECURITY: Always require manual password entry
+    setPassword('');
+    try {
+      localStorage.setItem('rkg_last_admin_role', role);
+      localStorage.setItem('rkg_last_admin_email', role === 'super_admin' ? 'superadmin@ruangkaryaguru.id' : 'kurator@ruangkaryaguru.id');
+    } catch (e) {}
+    setTimeout(() => {
+      passwordInputRef.current?.focus();
+    }, 120);
   };
 
   const triggerAuthFailure = (customMsg?: string) => {
@@ -174,6 +300,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
 
       if (response.ok && data.success && data.user) {
         setFailedAttempts(0);
+        saveLastUsedAccount(data.user);
         if (data.redirectUrl && typeof window !== 'undefined') {
           window.history.pushState(null, '', data.redirectUrl);
         }
@@ -193,10 +320,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
           return;
         }
         setFailedAttempts(0);
-        if (typeof window !== 'undefined') {
-          window.history.pushState(null, '', '/super-admin/dashboard');
-        }
-        onLoginSuccess({
+        const superUser: User = {
           id: 'USR-SUPER-ADMIN-001',
           email: 'superadmin@ruangkaryaguru.id',
           nama: 'Drs. Hendra Suwandi, M.Pd.',
@@ -204,7 +328,12 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
           adminRole: 'super_admin',
           instansi: 'Kementerian Pendidikan & Kebudayaan RI / Tim Utama',
           nip: '198204152006041001',
-        });
+        };
+        saveLastUsedAccount(superUser);
+        if (typeof window !== 'undefined') {
+          window.history.pushState(null, '', '/super-admin/dashboard');
+        }
+        onLoginSuccess(superUser);
         return;
       }
 
@@ -214,10 +343,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
           return;
         }
         setFailedAttempts(0);
-        if (typeof window !== 'undefined') {
-          window.history.pushState(null, '', '/admin-kurator/dashboard');
-        }
-        onLoginSuccess({
+        const kuratorUser: User = {
           id: 'USR-ADMIN-KURATOR-002',
           email: 'kurator@ruangkaryaguru.id',
           nama: 'Prof. Dr. Agus Setiawan',
@@ -225,7 +351,12 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
           adminRole: 'admin_kurator',
           instansi: 'Tim Kurasi Modul Ajar & Presensi Pelatihan',
           nip: '197503102000031005',
-        });
+        };
+        saveLastUsedAccount(kuratorUser);
+        if (typeof window !== 'undefined') {
+          window.history.pushState(null, '', '/admin-kurator/dashboard');
+        }
+        onLoginSuccess(kuratorUser);
         return;
       }
 
@@ -565,9 +696,22 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* 2. FIELD INPUT EMAIL INSTANSI */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Alamat Email Instansi</label>
+                {/* 2. FIELD INPUT EMAIL INSTANSI DENGAN POPUP AKUN TERSIMPAN (SAAT INGIN MENGISI SAJA) */}
+                <div ref={emailContainerRef} className="relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700">Alamat Email Instansi</label>
+                    {lastUsedAccounts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAccountDropdown(prev => !prev)}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer transition-colors"
+                        title="Pilih dari akun terakhir digunakan"
+                      >
+                        <History className="w-3 h-3 text-blue-600" />
+                        <span>Akun Terakhir Digunakan</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
@@ -577,15 +721,102 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                       disabled={lockoutSeconds > 0}
                       placeholder="email.admin@ruangkaryaguru.id"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 py-3 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] disabled:opacity-50 disabled:cursor-not-allowed"
+                      onFocus={() => setShowAccountDropdown(true)}
+                      onClick={() => setShowAccountDropdown(true)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setShowAccountDropdown(true);
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-9 py-3 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] disabled:opacity-50 disabled:cursor-not-allowed"
                     />
+                    {lastUsedAccounts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAccountDropdown(prev => !prev)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-[#1E3A8A] transition-colors cursor-pointer"
+                        title="Tampilkan akun yang tersimpan"
+                      >
+                        <History className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
+
+                  {/* FLOATING SUGGESTION MENU (Hanya muncul saat ingin mengisi saja) */}
+                  <AnimatePresence>
+                    {showAccountDropdown && lastUsedAccounts.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute z-30 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden py-1"
+                      >
+                        <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
+                          <span className="flex items-center gap-1.5 text-slate-700">
+                            <History className="w-3.5 h-3.5 text-blue-600" />
+                            Pilih Akun Terakhir Digunakan
+                          </span>
+                          <span className="text-[10px] text-amber-700 font-bold bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded">
+                            Sandi Manual
+                          </span>
+                        </div>
+                        <div className="max-h-52 overflow-y-auto divide-y divide-slate-100">
+                          {lastUsedAccounts.map((acc) => {
+                            const isSelected = portalRole === acc.role && email.toLowerCase() === acc.email.toLowerCase();
+                            return (
+                              <button
+                                key={acc.email}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectAccount(acc);
+                                }}
+                                className={`w-full px-3.5 py-2.5 text-left flex items-center gap-3 transition-colors cursor-pointer ${
+                                  isSelected ? 'bg-blue-50/80 hover:bg-blue-100/70' : 'hover:bg-slate-50'
+                                }`}
+                              >
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm border ${
+                                  acc.role === 'super_admin'
+                                    ? 'bg-purple-100 border-purple-200 text-purple-700'
+                                    : 'bg-sky-100 border-sky-200 text-sky-700'
+                                }`}>
+                                  {acc.role === 'super_admin' ? '🔑' : '🏢'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-xs font-black text-slate-900 truncate">
+                                      {acc.nama}
+                                    </span>
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                      acc.role === 'super_admin'
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      {acc.role === 'super_admin' ? 'Super Admin' : 'Admin Kurator'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] font-semibold text-slate-500 truncate">
+                                    {acc.email}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* 3. FIELD INPUT KATA SANDI */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Kata Sandi / Password</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700">Kata Sandi / Password</label>
+                    <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Wajib Ketik Manual
+                    </span>
+                  </div>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
@@ -593,7 +824,7 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                       type={showPassword ? 'text' : 'password'}
                       required
                       disabled={lockoutSeconds > 0}
-                      placeholder="••••••••"
+                      placeholder="Masukkan kata sandi secara manual..."
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-3 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -613,6 +844,10 @@ export const AdminLoginPage: React.FC<AdminLoginPageProps> = ({
                       )}
                     </button>
                   </div>
+                  <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Kata sandi wajib diisi manual dan tidak disimpan otomatis demi keamanan.</span>
+                  </p>
                 </div>
 
                 {/* 4. TOMBOL AKSI UTAMA: FULL-WIDTH PRIMARY BUTTON */}

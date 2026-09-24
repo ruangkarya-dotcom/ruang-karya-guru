@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldCheck, 
@@ -42,6 +42,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { Karya, User, AdminRole, AdminProfileData, CategoryType, FileFormat } from '../types';
+import { DEFAULT_OFFICIAL_MASTER_TEMPLATES } from '../data/initialData';
 
 export interface AdminFacilitationRecord {
   id: string;
@@ -198,6 +199,28 @@ export const AdminProfilePage: React.FC<AdminProfilePageProps> = ({
     };
   });
 
+  // Keep admin profile synced with currentUser
+  useEffect(() => {
+    if (currentUser) {
+      setAdminProfile(prev => {
+        if (currentUser.nama && prev.nama !== currentUser.nama) {
+          return {
+            ...prev,
+            nama: currentUser.nama,
+            nip: currentUser.nip || prev.nip,
+            instansi: currentUser.instansi || prev.instansi,
+            email: currentUser.email || prev.email,
+            adminRole: currentUser.adminRole || prev.adminRole,
+            jabatan: currentUser.adminRole === 'super_admin'
+              ? 'Super Admin & Lead Kurator Mutu Nasional'
+              : 'Admin Kurator & Verifikator Perangkat Ajar',
+          };
+        }
+        return prev;
+      });
+    }
+  }, [currentUser]);
+
   const [activeSubTab, setActiveSubTab] = useState<'templates' | 'pelatihan' | 'sertifikasi' | 'sop'>('templates');
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
@@ -213,8 +236,16 @@ export const AdminProfilePage: React.FC<AdminProfilePageProps> = ({
 
   // Filtered Templates / Admin Master Works
   const adminTemplatesList = useMemo(() => {
-    // Return all karya marked as master template or all approved works if available
-    let list = karyaList.filter(k => k.isMasterTemplate || k.status === 'Disetujui');
+    // Combine official master templates + custom templates uploaded by admin (stored in karyaList)
+    const customTemplates = karyaList.filter(k => k.isMasterTemplate);
+    const combined: Karya[] = [...customTemplates];
+    for (const def of DEFAULT_OFFICIAL_MASTER_TEMPLATES) {
+      if (!combined.some(c => c.id === def.id || c.judul.toLowerCase() === def.judul.toLowerCase())) {
+        combined.push(def);
+      }
+    }
+
+    let list = combined;
     
     if (templateSearchQuery.trim()) {
       const q = templateSearchQuery.toLowerCase();
@@ -316,8 +347,8 @@ Tautan: ${window.location.href}`;
     <div className="min-h-screen bg-slate-100 text-slate-900 pb-16 font-sans">
       
       {/* 1. TOP STATUS BAR / NAVIGATION */}
-      <div className="bg-slate-900 text-white border-b border-slate-800 sticky top-[68px] z-30 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-slate-900 text-white border-b border-slate-800 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
           
           <div className="flex items-center gap-3">
             <button
@@ -327,18 +358,6 @@ Tautan: ${window.location.href}`;
               <ArrowLeft className="w-4 h-4" />
               <span>Kembali</span>
             </button>
-
-            <div className="h-4 w-px bg-slate-700 hidden sm:block"></div>
-
-            <div className="flex items-center gap-2">
-              <span className="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-[11px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>Portofolio Administrator & Kurator Nasional</span>
-              </span>
-              <span className="text-xs text-slate-400 hidden md:inline">
-                ID: {adminProfile.nomorRegistrasiKurator || 'KUR-NAT-2026-0089'}
-              </span>
-            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -371,14 +390,6 @@ Tautan: ${window.location.href}`;
                 <span>Edit Profil</span>
               </button>
             )}
-
-            <button
-              onClick={onNavigateToDashboard}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold transition-all shadow-md cursor-pointer hover:scale-105"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Portal Admin</span>
-            </button>
           </div>
 
         </div>
@@ -427,7 +438,10 @@ Tautan: ${window.location.href}`;
                 </div>
 
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white font-sans">
-                  {adminProfile.nama} {adminProfile.gelar && <span className="text-amber-400">({adminProfile.gelar})</span>}
+                  {adminProfile.nama}
+                  {adminProfile.gelar && !adminProfile.nama.toLowerCase().includes(adminProfile.gelar.toLowerCase()) && (
+                    <span className="text-amber-400"> ({adminProfile.gelar})</span>
+                  )}
                 </h1>
 
                 <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs sm:text-sm text-slate-300">
@@ -459,14 +473,6 @@ Tautan: ${window.location.href}`;
 
             {/* Sisi Kanan: Action Callouts */}
             <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 w-full lg:w-auto shrink-0 pt-2 lg:pt-0">
-              <button
-                onClick={onOpenUploadModal}
-                className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-xs px-5 py-3.5 rounded-2xl shadow-lg shadow-sky-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Terbitkan Template Master Baru</span>
-              </button>
-
               <button
                 onClick={onNavigateToDashboard}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs px-5 py-3 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-105"
@@ -692,10 +698,10 @@ Tautan: ${window.location.href}`;
                   {isAdmin && (
                     <button
                       onClick={onOpenUploadModal}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap hover:scale-105 active:scale-95"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>+ Upload Template</span>
+                      <span>Upload Template</span>
                     </button>
                   )}
                 </div>
@@ -775,18 +781,9 @@ Tautan: ${window.location.href}`;
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300 p-8">
                   <BookOpen className="w-12 h-12 text-slate-400 mx-auto mb-3" />
                   <h4 className="font-bold text-slate-800 text-base">Belum Ada Template Panduan yang Diterbitkan</h4>
-                  <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                    Administrator dapat mengunggah master template modul ajar, panduan asesmen, dan LKPD acuan untuk peserta pelatihan.
+                  <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                    Administrator dapat mengunggah master template modul ajar, panduan asesmen, dan LKPD acuan melalui tombol <strong>Upload Template</strong> di atas.
                   </p>
-                  {isAdmin && (
-                    <button
-                      onClick={onOpenUploadModal}
-                      className="mt-4 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Unggah Template Pertama</span>
-                    </button>
-                  )}
                 </div>
               )}
 

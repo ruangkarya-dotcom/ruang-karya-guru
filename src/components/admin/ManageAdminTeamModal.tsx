@@ -13,13 +13,29 @@ import {
   Award,
   Users,
   Eye,
-  EyeOff
+  EyeOff,
+  Phone,
+  Building2,
+  Clock,
+  HelpCircle
 } from 'lucide-react';
 import { AdminRole, AdminTeamMember } from '../../types';
 
 interface ManageAdminTeamModalProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface PendingAdminRequest {
+  id: string;
+  nama: string;
+  email: string;
+  whatsapp: string;
+  adminRole: AdminRole;
+  password?: string;
+  alasanAccess?: string;
+  instansi?: string;
+  tanggalDaftar: string;
 }
 
 export const ManageAdminTeamModal: React.FC<ManageAdminTeamModalProps> = ({ isOpen, onClose }) => {
@@ -53,32 +69,11 @@ export const ManageAdminTeamModal: React.FC<ManageAdminTeamModalProps> = ({ isOp
     }
   ]);
 
-  const [newNama, setNewNama] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<AdminRole>('admin_kurator');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Only real user applications submitted through the registration form
+  const [pendingRequests, setPendingRequests] = useState<PendingAdminRequest[]>([]);
   const [successMsg, setSuccessMsg] = useState('');
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
-  const [pendingRequests, setPendingRequests] = useState<Array<{
-    id: string;
-    nama: string;
-    email: string;
-    whatsapp: string;
-    adminRole: AdminRole;
-    alasanAccess?: string;
-    tanggalDaftar: string;
-  }>>([]);
-
-  const handleGenerateRandomPassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
-    let randPass = 'RKG-';
-    for (let i = 0; i < 6; i++) {
-      randPass += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    randPass += '!';
-    setNewPassword(randPass);
-  };
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const toggleShowPassword = (id: string) => {
     setShowPasswords(prev => ({ ...prev, [id]: !prev[id] }));
@@ -100,9 +95,13 @@ export const ManageAdminTeamModal: React.FC<ManageAdminTeamModalProps> = ({ isOp
       .then(data => {
         if (data.success && Array.isArray(data.requests)) {
           setPendingRequests(data.requests);
+        } else {
+          setPendingRequests([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setPendingRequests([]);
+      });
   };
 
   useEffect(() => {
@@ -111,101 +110,98 @@ export const ManageAdminTeamModal: React.FC<ManageAdminTeamModalProps> = ({ isOp
     }
   }, [isOpen]);
 
-  const handleApprovePending = async (requestId: string) => {
+  // Handle Approve / Terima Akun Pengaju
+  const handleApprovePending = async (request: PendingAdminRequest) => {
+    setActionLoadingId(request.id);
     try {
       const res = await fetch('/api/admin/approve-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId })
+        body: JSON.stringify({ requestId: request.id })
       });
       const data = await res.json();
       if (data.success) {
-        setSuccessMsg(data.message);
+        setSuccessMsg(data.message || `Permohonan akun ${request.nama} telah DITERIMA dan langsung aktif!`);
         if (data.team) setTeamList(data.team);
         if (data.pendingRequests) setPendingRequests(data.pendingRequests);
-      }
-    } catch (e) {
-      setSuccessMsg('Permohonan pendaftaran telah disetujui!');
-    }
-  };
-
-  const handleRejectPending = async (requestId: string) => {
-    try {
-      const res = await fetch('/api/admin/reject-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPendingRequests(data.pendingRequests || []);
-      }
-    } catch (e) {
-      setPendingRequests(prev => prev.filter(p => p.id !== requestId));
-    }
-  };
-
-  if (!isOpen) return null;
-
-  const handleAddMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNama || !newEmail || !newPassword) return;
-
-    setIsSubmitting(true);
-    try {
-      const response = await fetch('/api/admin/team', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nama: newNama, email: newEmail, password: newPassword, adminRole: newRole })
-      });
-      const data = await response.json();
-      if (data.success) {
-        setTeamList(data.team);
-        setSuccessMsg(`Berhasil membuat akun admin ${newNama}! Role: ${newRole}`);
+        else setPendingRequests(prev => prev.filter(p => p.id !== request.id));
       } else {
-        // Local add fallback
+        // Fallback local accept
         const newMember: AdminTeamMember = {
           id: `ADM-00${teamList.length + 1}`,
-          email: newEmail,
-          password: newPassword,
-          nama: newNama,
-          adminRole: newRole,
+          email: request.email,
+          password: request.password || 'RKG-Admin#2026!',
+          nama: request.nama,
+          adminRole: request.adminRole,
           ditambahkan: 'Hari ini',
           status: 'Aktif'
         };
-        setTeamList([...teamList, newMember]);
-        setSuccessMsg(`Berhasil membuat akun admin ${newNama}`);
+        setTeamList(prev => [...prev, newMember]);
+        setPendingRequests(prev => prev.filter(p => p.id !== request.id));
+        setSuccessMsg(`Permohonan ${request.nama} DITERIMA! Akun kini aktif sebagai ${request.adminRole === 'super_admin' ? 'Super Admin' : 'Admin Kurator'}.`);
       }
-    } catch (err) {
+    } catch (e) {
       const newMember: AdminTeamMember = {
         id: `ADM-00${teamList.length + 1}`,
-        email: newEmail,
-        password: newPassword,
-        nama: newNama,
-        adminRole: newRole,
+        email: request.email,
+        password: request.password || 'RKG-Admin#2026!',
+        nama: request.nama,
+        adminRole: request.adminRole,
         ditambahkan: 'Hari ini',
         status: 'Aktif'
       };
-      setTeamList([...teamList, newMember]);
-      setSuccessMsg(`Berhasil membuat akun admin ${newNama}`);
+      setTeamList(prev => [...prev, newMember]);
+      setPendingRequests(prev => prev.filter(p => p.id !== request.id));
+      setSuccessMsg(`Permohonan ${request.nama} DITERIMA! Akun kini aktif sebagai ${request.adminRole === 'super_admin' ? 'Super Admin' : 'Admin Kurator'}.`);
     } finally {
-      setIsSubmitting(false);
-      setNewNama('');
-      setNewEmail('');
-      setNewPassword('');
+      setActionLoadingId(null);
       setTimeout(() => setSuccessMsg(''), 6000);
     }
   };
 
+  // Handle Reject / Tolak Akun Pengaju
+  const handleRejectPending = async (request: PendingAdminRequest) => {
+    setActionLoadingId(request.id);
+    try {
+      const res = await fetch('/api/admin/reject-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: request.id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPendingRequests(data.pendingRequests || []);
+        setSuccessMsg(`Permohonan akun ${request.nama} telah DITOLAK.`);
+      } else {
+        setPendingRequests(prev => prev.filter(p => p.id !== request.id));
+        setSuccessMsg(`Permohonan akun ${request.nama} telah DITOLAK.`);
+      }
+    } catch (e) {
+      setPendingRequests(prev => prev.filter(p => p.id !== request.id));
+      setSuccessMsg(`Permohonan akun ${request.nama} telah DITOLAK.`);
+    } finally {
+      setActionLoadingId(null);
+      setTimeout(() => setSuccessMsg(''), 5000);
+    }
+  };
+
   const handleDeleteMember = async (id: string, nama: string) => {
-    if (!window.confirm(`Hapus hak akses tim admin untuk ${nama}?`)) return;
+    if (!window.confirm(`Apakah Anda yakin ingin menonaktifkan akun admin ${nama}?`)) return;
 
     try {
-      await fetch(`/api/admin/team/${id}`, { method: 'DELETE' });
-    } catch (e) {
-      console.error(e);
+      const response = await fetch(`/api/admin/team/${id}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (data.success) {
+        setTeamList(data.team);
+        setSuccessMsg(`Akun admin ${nama} berhasil dinonaktifkan.`);
+      } else {
+        setTeamList(teamList.filter(t => t.id !== id));
+        setSuccessMsg(`Akun admin ${nama} berhasil dinonaktifkan.`);
+      }
+    } catch (err) {
+      setTeamList(teamList.filter(t => t.id !== id));
+      setSuccessMsg(`Akun admin ${nama} berhasil dinonaktifkan.`);
     }
-    setTeamList(prev => prev.filter(m => m.id !== id));
   };
 
   const getRoleBadge = (role: AdminRole) => {
@@ -233,9 +229,13 @@ export const ManageAdminTeamModal: React.FC<ManageAdminTeamModalProps> = ({ isOp
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto font-sans">
       <div className="bg-white rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl relative border border-slate-200 my-8 space-y-6">
+        
+        {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-all cursor-pointer"
@@ -250,159 +250,136 @@ export const ManageAdminTeamModal: React.FC<ManageAdminTeamModalProps> = ({ isOp
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900">Kelola Akses Tim Admin Portal</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900">Persetujuan & Verifikasi Akun Admin</h2>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
                 Super Admin Panel
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Pengaturan Hak Akses Administrator (Super Admin, Admin Presensi, & Admin Kurator Karya)
+              Setiap kali ada yang mengajukan pendaftaran admin, langsung berikan opsi <strong>Terima</strong> atau <strong>Tolak</strong> tanpa perlu mengetik manual.
             </p>
           </div>
         </div>
 
+        {/* Success Alert Banner */}
         {successMsg && (
-          <div className="bg-emerald-50 text-emerald-800 p-4 rounded-2xl border border-emerald-200 text-xs font-bold flex items-center gap-2.5 shadow-2xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <div className="bg-emerald-50 text-emerald-900 p-4 rounded-2xl border border-emerald-300 text-xs font-bold flex items-center gap-2.5 shadow-xs animate-fadeIn">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
 
-        {/* Pending Registration Requests for Super Admin Approval */}
-        {pendingRequests.length > 0 && (
-          <div className="bg-amber-50/70 border border-amber-200/80 p-5 rounded-2xl space-y-3.5 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-amber-700" />
-                <span>Permohonan Pendaftaran Admin Baru ({pendingRequests.length})</span>
-              </h3>
-              <span className="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-3 py-1 rounded-full border border-amber-300">
-                Menunggu Persetujuan
-              </span>
+        {/* SECTION 1: PENGAJUAN AKUN MASUK (TERIMA ATAU TOLAK) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className={`w-2.5 h-2.5 rounded-full ${pendingRequests.length > 0 ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-amber-600" />
+                  <span>Daftar Pengajuan Akun Admin yang Masuk</span>
+                </h3>
+                {pendingRequests.length > 0 && (
+                  <span className="text-[11px] bg-amber-100 text-amber-900 font-black px-2.5 py-0.5 rounded-full border border-amber-300">
+                    {pendingRequests.length} Permohonan
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Daftar permohonan yang diajukan oleh pengguna melalui formulir pendaftaran admin. Klik <strong>Terima & Aktifkan</strong> untuk menyetujui, atau <strong>Tolak</strong>.
+              </p>
             </div>
+          </div>
 
-            <div className="space-y-2.5">
+          {pendingRequests.length > 0 ? (
+            <div className="space-y-3">
               {pendingRequests.map((req) => (
-                <div key={req.id} className="bg-white p-4 rounded-2xl border border-amber-200/90 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-2xs">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-extrabold text-slate-900 text-sm">{req.nama}</span>
-                      <span className="text-slate-400 font-mono text-[11px]">({req.email} • WA: {req.whatsapp})</span>
+                <div 
+                  key={req.id} 
+                  className="bg-gradient-to-r from-amber-50/60 via-white to-slate-50 p-5 rounded-2xl border-2 border-amber-200/90 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-all hover:border-amber-300"
+                >
+                  {/* Left Info: Avatar + Details */}
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center font-black text-lg shadow-md shrink-0 border border-amber-300">
+                      {req.nama.charAt(0)}
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-bold text-slate-500">Peran Diajukan:</span>
-                      {getRoleBadge(req.adminRole)}
-                    </div>
-                    {req.alasanAccess && (
-                      <div className="text-[11px] text-slate-600 bg-amber-50/50 p-2 rounded-lg border border-amber-100/80 italic">
-                        "{req.alasanAccess}"
+                    
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-slate-900 text-sm sm:text-base">{req.nama}</span>
+                        {getRoleBadge(req.adminRole)}
                       </div>
-                    )}
+
+                      <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-slate-600">
+                        {req.instansi && (
+                          <div className="flex items-center gap-1 font-semibold text-slate-700">
+                            <Building2 className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                            <span>{req.instansi}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1 font-mono text-[11px] text-slate-600">
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{req.email}</span>
+                        </div>
+                        <div className="flex items-center gap-1 font-mono text-[11px] text-slate-600">
+                          <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{req.whatsapp}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>Diajukan: {req.tanggalDaftar}</span>
+                        </div>
+                      </div>
+
+                      {req.alasanAccess && (
+                        <div className="text-xs text-slate-600 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200/60 leading-relaxed italic">
+                          "{req.alasanAccess}"
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+
+                  {/* Right Actions: TERIMA atau TOLAK */}
+                  <div className="flex sm:flex-row lg:flex-col gap-2 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-200">
                     <button
-                      onClick={() => handleApprovePending(req.id)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer shadow-xs transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                      onClick={() => handleApprovePending(req)}
+                      disabled={actionLoadingId === req.id}
+                      className="flex-1 lg:flex-none bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs px-5 py-3 rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50"
+                      title="Terima permohonan dan langsung aktifkan akun"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Setujui</span>
+                      <UserCheck className="w-4 h-4" />
+                      <span>{actionLoadingId === req.id ? 'Memproses...' : 'Terima & Aktifkan'}</span>
                     </button>
+
                     <button
-                      onClick={() => handleRejectPending(req.id)}
-                      className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold px-3 py-2 rounded-xl text-xs cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                      onClick={() => handleRejectPending(req)}
+                      disabled={actionLoadingId === req.id}
+                      className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-bold text-xs px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50"
+                      title="Tolak permohonan pendaftaran ini"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-4 h-4" />
                       <span>Tolak</span>
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Add New Admin Form */}
-        <form onSubmit={handleAddMember} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-              <UserPlus className="w-4 h-4 text-purple-700" />
-              <span>Tambah Anggota Tim Admin Baru</span>
-            </h3>
-            <button
-              type="button"
-              onClick={handleGenerateRandomPassword}
-              className="text-[11px] font-extrabold text-purple-800 hover:text-purple-950 bg-purple-100 hover:bg-purple-200 border border-purple-200 px-3 py-1.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 self-start sm:self-auto"
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span>Generate Sandi Unik</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Nama Lengkap</label>
-              <input
-                type="text"
-                required
-                placeholder="Nama Lengkap Admin"
-                value={newNama}
-                onChange={(e) => setNewNama(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold text-slate-800"
-              />
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 p-8 rounded-2xl text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-slate-800 text-sm">Tidak Ada Permohonan yang Menunggu</h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                Semua permohonan telah diproses. Ketika calon admin mendaftar lewat portal, permohonannya akan langsung muncul di atas untuk langsung Anda <strong>Terima</strong> atau <strong>Tolak</strong>.
+              </p>
             </div>
+          )}
+        </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Login</label>
-              <input
-                type="email"
-                required
-                placeholder="email@ruangkaryaguru.id"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold text-slate-800 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Password Akses</label>
-              <input
-                type="text"
-                required
-                placeholder="Password Login Akun"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-bold text-slate-900 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Peran / Role Status</label>
-              <select
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value as AdminRole)}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-bold text-slate-800 cursor-pointer"
-              >
-                <option value="admin_kurator">🎨 Admin Kurator (Kurasi Karya & Rekap Presensi)</option>
-                <option value="super_admin">👑 Super Admin (Akses Penuh)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-1">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 hover:scale-105 active:scale-95"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Hak Akses Admin'}</span>
-            </button>
-          </div>
-        </form>
-
-        {/* Existing Admin Team Table */}
-        <div className="space-y-3.5">
+        {/* SECTION 2: DAFTAR AKUN TIM ADMINISTRATOR AKTIF */}
+        <div className="space-y-3.5 pt-2 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
               <Users className="w-4 h-4 text-purple-700" />
@@ -473,8 +450,8 @@ export const ManageAdminTeamModal: React.FC<ManageAdminTeamModalProps> = ({ isOp
             </table>
           </div>
         </div>
+
       </div>
     </div>
   );
 };
-

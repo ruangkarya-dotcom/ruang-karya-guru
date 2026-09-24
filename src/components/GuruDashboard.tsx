@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   GraduationCap, 
@@ -17,7 +17,7 @@ import {
   Settings, 
   ExternalLink, 
   Eye, 
-  EyeOff,
+  EyeOff, 
   Sparkles, 
   FileCheck, 
   ShieldCheck, 
@@ -53,6 +53,7 @@ interface GuruDashboardProps {
   onDeleteKarya?: (id: string) => void;
   onDownloadKarya?: (id: string) => void;
   onViewPublicProfile?: () => void;
+  onOpenUploadModal?: () => void;
   initialSubTab?: 'pelatihan' | 'karya' | 'laporan' | 'pengaturan';
   autoOpenUpload?: boolean;
 }
@@ -66,11 +67,27 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   onDeleteKarya,
   onDownloadKarya,
   onViewPublicProfile,
+  onOpenUploadModal,
   initialSubTab = 'pelatihan',
   autoOpenUpload = false,
 }) => {
   // Navigation sub-tabs for Guru
   const [activeTab, setActiveTab] = useState<'pelatihan' | 'karya' | 'laporan' | 'pengaturan'>(initialSubTab);
+
+  // Sync sub tab when prop changes
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  // Sync autoOpenUpload when triggered externally
+  useEffect(() => {
+    if (autoOpenUpload) {
+      setActiveTab('karya');
+      setIsUploadFormOpen(true);
+    }
+  }, [autoOpenUpload]);
 
   // Teacher Profile state for "Pengaturan Akun"
   const [profileNama, setProfileNama] = useState(currentUser.nama || '');
@@ -94,7 +111,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   const [passwordError, setPasswordError] = useState('');
 
   // Upload Form State for "Ruang Karya Saya"
-  const [isUploadFormOpen, setIsUploadFormOpen] = useState(autoOpenUpload || initialSubTab === 'karya' && autoOpenUpload);
+  const [isUploadFormOpen, setIsUploadFormOpen] = useState(autoOpenUpload || (initialSubTab === 'karya' && autoOpenUpload));
 
   const [judulKarya, setJudulKarya] = useState('');
   const [mapelKarya, setMapelKarya] = useState('Matematika');
@@ -104,12 +121,50 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   const [tujuanKarya, setTujuanKarya] = useState('');
   const [deskripsiKarya, setDeskripsiKarya] = useState('');
   const [fileUrlKarya, setFileUrlKarya] = useState('');
+  const [localSelectedFileName, setLocalSelectedFileName] = useState('');
+  const [localSelectedFileSize, setLocalSelectedFileSize] = useState('3.2 MB');
   const [uploadSuccessAlert, setUploadSuccessAlert] = useState(false);
   const [karyaToDelete, setKaryaToDelete] = useState<Karya | null>(null);
 
+  // Trigger upload either via full modal or inline form
+  const handleTriggerUpload = () => {
+    if (onOpenUploadModal) {
+      onOpenUploadModal();
+    } else {
+      setActiveTab('karya');
+      setIsUploadFormOpen(true);
+      setTimeout(() => {
+        const el = document.getElementById('section-guru-upload-form');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  };
+
+  const handleLocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setLocalSelectedFileName(file.name);
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      setLocalSelectedFileSize(`${sizeMb} MB`);
+
+      const ext = file.name.split('.').pop()?.toUpperCase();
+      if (ext === 'PDF') setFormatKarya('PDF');
+      else if (ext === 'DOC' || ext === 'DOCX') setFormatKarya('DOCX');
+      else if (ext === 'PPT' || ext === 'PPTX') setFormatKarya('PPTX');
+      else if (ext === 'MP4') setFormatKarya('MP4');
+      else if (ext === 'ZIP') setFormatKarya('ZIP');
+    }
+  };
+
   // Filter Teacher's Karya List
   const myKaryaList = karyaList.filter(k => 
-    (currentUser.nama && k.namaGuru && k.namaGuru.toLowerCase().includes(currentUser.nama.toLowerCase())) ||
+    (currentUser.id && k.authorId && k.authorId === currentUser.id) ||
+    (currentUser.nama && k.namaGuru && (
+      k.namaGuru.toLowerCase().includes(currentUser.nama.toLowerCase()) ||
+      currentUser.nama.toLowerCase().includes(k.namaGuru.toLowerCase())
+    )) ||
     (currentUser.nip && k.nipOrInstansi && k.nipOrInstansi.includes(currentUser.nip)) ||
     (currentUser.instansi && k.nipOrInstansi && k.nipOrInstansi.toLowerCase().includes(currentUser.instansi.toLowerCase()))
   );
@@ -239,17 +294,18 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       deskripsi: deskripsiKarya,
       tujuanPembelajaran: tujuanKarya || 'Meningkatkan kompetensi berpikir kritis peserta didik sesuai Kurikulum Merdeka.',
       namaGuru: currentUser.nama,
+      authorId: currentUser.id,
       nipOrInstansi: `NIP. ${currentUser.nip || profileNip} / ${currentUser.instansi || profileInstansi}`,
       mataPelajaran: mapelKarya,
       jenjang: jenjangKarya,
       kategori: kategoriKarya,
       formatFile: formatKarya,
-      ukuranFile: '3.4 MB',
+      ukuranFile: localSelectedFileName ? localSelectedFileSize : '3.4 MB',
       tanggalUpload: new Date().toISOString().split('T')[0],
       status: 'Pending',
       jumlahDownload: 0,
       jumlahView: 1,
-      fileUrl: fileUrlKarya || '',
+      fileUrl: fileUrlKarya || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
     };
 
     onUploadKarya(newKaryaItem);
@@ -258,6 +314,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     setDeskripsiKarya('');
     setTujuanKarya('');
     setFileUrlKarya('');
+    setLocalSelectedFileName('');
     setUploadSuccessAlert(true);
     setTimeout(() => setUploadSuccessAlert(false), 4000);
   };
@@ -315,6 +372,16 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-stretch justify-center gap-3 shrink-0">
+            <button
+              id="btn-guru-upload-karya-hero"
+              onClick={handleTriggerUpload}
+              className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm px-5 py-2.5 rounded-2xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 border border-blue-400/40 cursor-pointer hover:scale-105 active:scale-95 text-center whitespace-nowrap"
+              title="Unggah Modul Ajar atau Perangkat Pembelajaran Baru"
+            >
+              <Upload className="w-4 h-4 shrink-0 text-white" />
+              <span>Unggah Karya Baru</span>
+            </button>
+
             {onViewPublicProfile && (
               <button
                 id="btn-guru-view-public-portfolio"
@@ -561,6 +628,16 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                 <div className="text-[10px] font-bold text-rose-700">Perlu Revisi</div>
               </div>
             </div>
+
+            {/* Quick Action: Unggah Karya Baru */}
+            <button
+              id="btn-guru-quick-upload-card"
+              onClick={handleTriggerUpload}
+              className="w-full mt-2.5 py-2.5 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs hover:scale-101 active:scale-98"
+            >
+              <Upload className="w-3.5 h-3.5 text-purple-700" />
+              <span>Unggah Karya / Modul Baru</span>
+            </button>
           </div>
 
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
@@ -849,10 +926,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
 
                     <div className="flex items-center gap-2 shrink-0 flex-wrap">
                       <button
-                        onClick={() => {
-                          setActiveTab('karya');
-                          setIsUploadFormOpen(true);
-                        }}
+                        onClick={handleTriggerUpload}
                         className="bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                       >
                         <Upload className="w-3.5 h-3.5" />
@@ -1042,19 +1116,29 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setIsUploadFormOpen(!isUploadFormOpen)}
-                  className="bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs sm:text-sm px-5 py-3 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-105 shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{isUploadFormOpen ? 'Tutup Form Unggah' : 'Unggah Karya Baru'}</span>
-                </button>
+                <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                  <button
+                    onClick={handleTriggerUpload}
+                    className="bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-105"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Unggah Berkas Karya</span>
+                  </button>
+                  <button
+                    onClick={() => setIsUploadFormOpen(!isUploadFormOpen)}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isUploadFormOpen ? 'Tutup Formulir Cepat' : 'Formulir Cepat'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Form Unggah Karya Baru */}
               <AnimatePresence>
                 {isUploadFormOpen && (
                   <motion.form
+                    id="section-guru-upload-form"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
@@ -1171,7 +1255,31 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                       </div>
 
                       <div className="sm:col-span-2 lg:col-span-3">
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Tautan Berkas (Google Drive / Cloud Storage / URL)</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Unggah Berkas Dokumen (Opsional / Disarankan)</label>
+                        <div className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white rounded-2xl p-4 text-center cursor-pointer transition-colors relative">
+                          <input
+                            type="file"
+                            accept=".pdf,.docx,.doc,.pptx,.ppt,.mp4,.zip"
+                            onChange={handleLocalFileChange}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                          <Upload className="w-6 h-6 text-blue-600 mx-auto mb-1" />
+                          {localSelectedFileName ? (
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-extrabold text-slate-800">{localSelectedFileName}</p>
+                              <p className="text-[10px] text-emerald-600 font-bold">{localSelectedFileSize} &bull; Berkas Terpilih</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">Pilih berkas dari perangkat Anda</p>
+                              <p className="text-[10px] text-slate-400">Mendukung PDF, DOCX, PPTX, MP4, atau ZIP</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Tautan Berkas (Google Drive / Cloud Storage / URL Alternatif)</label>
                         <input
                           type="url"
                           placeholder="https://drive.google.com/file/d/.../view"
@@ -1222,8 +1330,15 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                             <FolderCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                             <p className="font-bold text-sm text-slate-700">Belum Ada Karya yang Diunggah</p>
                             <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                              Anda belum mengunggah karya atau portofolio. Klik tombol "Unggah Karya Baru" di atas untuk menambahkan modul ajar atau perangkat pembelajaran Anda.
+                              Anda belum mengunggah karya atau portofolio. Klik tombol di bawah untuk menambahkan modul ajar atau perangkat pembelajaran Anda.
                             </p>
+                            <button
+                              onClick={handleTriggerUpload}
+                              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold shadow-md cursor-pointer transition-all hover:scale-105"
+                            >
+                              <Upload className="w-4 h-4" />
+                              <span>Unggah Karya Sekarang</span>
+                            </button>
                           </td>
                         </tr>
                       ) : (
